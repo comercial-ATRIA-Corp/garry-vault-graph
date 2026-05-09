@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GarryVault - Grafo de Conhecimento</title>
+  <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: #eee; overflow: hidden; }
+    #network { width: 100vw; height: 100vh; background: #1a1a2e; }
+    .overlay { position: absolute; top: 20px; left: 20px; z-index: 10; background: rgba(25,25,46,0.95); padding: 20px; border-radius: 12px; border: 1px solid #2d2d4a; max-width: 320px; backdrop-filter: blur(10px); }
+    .overlay h1 { font-size: 1.4rem; margin-bottom: 8px; color: #4fc3f7; }
+    .overlay p { font-size: 0.85rem; color: #aaa; margin-bottom: 12px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+    .controls { position: absolute; bottom: 20px; right: 20px; z-index: 10; display: flex; gap: 8px; }
+    .btn { background: #2d2d4a; color: #fff; border: 1px solid #3d3d5a; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; transition: all 0.2s; }
+    .btn:hover { background: #3d3d5a; border-color: #4fc3f7; }
+    .btn.active { background: #4fc3f7; color: #1a1a2e; border-color: #4fc3f7; }
+    .stats { position: absolute; top: 20px; right: 20px; z-index: 10; background: rgba(25,25,46,0.95); padding: 15px; border-radius: 12px; border: 1px solid #2d2d4a; font-size: 0.85rem; text-align: right; }
+    .stats span { color: #4fc3f7; font-weight: bold; font-size: 1.1rem; }
+    #tooltip { position: absolute; background: rgba(25,25,46,0.95); color: #eee; padding: 10px 15px; border-radius: 8px; border: 1px solid #4fc3f7; font-size: 0.85rem; pointer-events: none; display: none; z-index: 100; max-width: 250px; }
+  </style>
+</head>
+<body>
+  <div class="overlay">
+    <h1>🕸️ GarryVault</h1>
+    <p>Grafo interativo da base de conhecimento. Arraste os nós, dê zoom e explore as conexões.</p>
+    <div class="legend" id="legend"></div>
+  </div>
+  
+  <div class="stats">
+    <div>Nós: <span id="nodeCount">0</span></div>
+    <div>Arestas: <span id="edgeCount">0</span></div>
+    <div style="margin-top:8px; font-size:0.75rem; color:#666;">Clique para focar • Scroll para zoom</div>
+  </div>
+
+  <div class="controls">
+    <button class="btn" onclick="fitGraph()">Centralizar</button>
+    <button class="btn" onclick="togglePhysics()">Física: ON</button>
+    <button class="btn" onclick="exportImage()">Exportar PNG</button>
+  </div>
+
+  <div id="tooltip"></div>
+  <div id="network"></div>
+
+  <script type="text/javascript">
+    const graphData = {
+      "nodes": [
+        {"id": "WIKI", "label": "WIKI", "group": "root", "path": "WIKI.md"},
+        {"id": "AGENTS", "label": "AGENTS", "group": "root", "path": "AGENTS.md"},
+        {"id": "inbox", "label": "inbox", "group": "root", "path": "inbox.md"},
+        {"id": "index", "label": "index", "group": "root", "path": "index.md"},
+        {"id": "sources/token-optimization-skill-scout-2026-05-09", "label": "token-optimization-skill-scout", "group": "sources", "path": "sources/token-optimization-skill-scout-2026-05-09.md"},
+        {"id": "sources/agents-md-pre-token-optimization-backup-20260509t052838z", "label": "AGENTS.md backup", "group": "sources", "path": "sources/agents-md-pre-token-optimization-backup-20260509t052838z.md"},
+        {"id": "sources/soul-md-pre-token-optimization-backup-20260509t052838z", "label": "SOUL.md backup", "group": "sources", "path": "sources/soul-md-pre-token-optimization-backup-20260509t052838z.md"},
+        {"id": "sources/index", "label": "sources/index", "group": "sources", "path": "sources/index.md"},
+        {"id": "entities/index", "label": "entities/index", "group": "entities", "path": "entities/index.md"},
+        {"id": "syntheses/token-optimization-architecture", "label": "token-optimization-architecture", "group": "syntheses", "path": "syntheses/token-optimization-architecture.md"},
+        {"id": "syntheses/fabula-do-genio-aprendiz", "label": "fabula-do-genio-aprendiz", "group": "syntheses", "path": "syntheses/fabula-do-genio-aprendiz.md"},
+        {"id": "syntheses/index", "label": "syntheses/index", "group": "syntheses", "path": "syntheses/index.md"},
+        {"id": "concepts/index", "label": "concepts/index", "group": "concepts", "path": "concepts/index.md"},
+        {"id": "reports/low-confidence", "label": "low-confidence", "group": "reports", "path": "reports/low-confidence.md"},
+        {"id": "reports/open-questions", "label": "open-questions", "group": "reports", "path": "reports/open-questions.md"},
+        {"id": "reports/lint", "label": "lint", "group": "reports", "path": "reports/lint.md"},
+        {"id": "reports/relationship-graph", "label": "relationship-graph", "group": "reports", "path": "reports/relationship-graph.md"},
+        {"id": "reports/person-agent-directory", "label": "person-agent-directory", "group": "reports", "path": "reports/person-agent-directory.md"},
+        {"id": "reports/contradictions", "label": "contradictions", "group": "reports", "path": "reports/contradictions.md"},
+        {"id": "reports/claim-health", "label": "claim-health", "group": "reports", "path": "reports/claim-health.md"},
+        {"id": "reports/privacy-review", "label": "privacy-review", "group": "reports", "path": "reports/privacy-review.md"},
+        {"id": "reports/index", "label": "reports/index", "group": "reports", "path": "reports/index.md"},
+        {"id": "reports/provenance-coverage", "label": "provenance-coverage", "group": "reports", "path": "reports/provenance-coverage.md"},
+        {"id": "reports/stale-pages", "label": "stale-pages", "group": "reports", "path": "reports/stale-pages.md"}
+      ],
+      "edges": [
+        {"from": "index", "to": "sources/agents-md-pre-token-optimization-backup-20260509t052838z"},
+        {"from": "index", "to": "sources/soul-md-pre-token-optimization-backup-20260509t052838z"},
+        {"from": "index", "to": "sources/token-optimization-skill-scout-2026-05-09"},
+        {"from": "index", "to": "syntheses/fabula-do-genio-aprendiz"},
+        {"from": "index", "to": "syntheses/token-optimization-architecture"},
+        {"from": "index", "to": "reports/claim-health"},
+        {"from": "index", "to": "reports/contradictions"},
+        {"from": "index", "to": "reports/lint"},
+        {"from": "index", "to": "reports/low-confidence"},
+        {"from": "index", "to": "reports/open-questions"},
+        {"from": "index", "to": "reports/person-agent-directory"},
+        {"from": "index", "to": "reports/privacy-review"},
+        {"from": "index", "to": "reports/provenance-coverage"},
+        {"from": "index", "to": "reports/relationship-graph"},
+        {"from": "index", "to": "reports/stale-pages"},
+        {"from": "sources/token-optimization-skill-scout-2026-05-09", "to": "syntheses/token-optimization-architecture"},
+        {"from": "sources/agents-md-pre-token-optimization-backup-20260509t052838z", "to": "syntheses/token-optimization-architecture"},
+        {"from": "sources/soul-md-pre-token-optimization-backup-20260509t052838z", "to": "syntheses/fabula-do-genio-aprendiz"},
+        {"from": "sources/soul-md-pre-token-optimization-backup-20260509t052838z", "to": "syntheses/token-optimization-architecture"},
+        {"from": "sources/index", "to": "sources/agents-md-pre-token-optimization-backup-20260509t052838z"},
+        {"from": "sources/index", "to": "sources/soul-md-pre-token-optimization-backup-20260509t052838z"},
+        {"from": "sources/index", "to": "sources/token-optimization-skill-scout-2026-05-09"},
+        {"from": "syntheses/token-optimization-architecture", "to": "syntheses/fabula-do-genio-aprendiz"},
+        {"from": "syntheses/index", "to": "syntheses/fabula-do-genio-aprendiz"},
+        {"from": "syntheses/index", "to": "syntheses/token-optimization-architecture"},
+        {"from": "reports/open-questions", "to": "syntheses/token-optimization-architecture"},
+        {"from": "reports/index", "to": "reports/claim-health"},
+        {"from": "reports/index", "to": "reports/contradictions"},
+        {"from": "reports/index", "to": "reports/lint"},
+        {"from": "reports/index", "to": "reports/low-confidence"},
+        {"from": "reports/index", "to": "reports/open-questions"},
+        {"from": "reports/index", "to": "reports/person-agent-directory"},
+        {"from": "reports/index", "to": "reports/privacy-review"},
+        {"from": "reports/index", "to": "reports/provenance-coverage"},
+        {"from": "reports/index", "to": "reports/relationship-graph"},
+        {"from": "reports/index", "to": "reports/stale-pages"}
+      ]
+    };
+
+    const groupColors = {
+      root: '#4fc3f7',
+      sources: '#81c784',
+      entities: '#ffb74d',
+      syntheses: '#e57373',
+      concepts: '#ba68c8',
+      reports: '#64b5f6'
+    };
+
+    const nodes = new vis.DataSet(
+      graphData.nodes.map(n => ({
+        ...n,
+        color: {
+          background: groupColors[n.group] || '#90a4ae',
+          border: groupColors[n.group] || '#90a4ae',
+          highlight: { background: '#fff', border: groupColors[n.group] || '#90a4ae' }
+        },
+        font: { color: '#eee', size: 14 },
+        shape: 'dot',
+        size: n.group === 'root' ? 25 : 18,
+        borderWidth: 2,
+        borderWidthSelected: 4,
+        shadow: { enabled: true, color: 'rgba(0,0,0,0.5)', size: 10, x: 5, y: 5 }
+      }))
+    );
+
+    const edges = new vis.DataSet(
+      graphData.edges.map(e => ({
+        ...e,
+        color: { color: 'rgba(100,100,150,0.4)', highlight: '#4fc3f7' },
+        width: 1.5,
+        smooth: { type: 'continuous' },
+        arrows: { to: { enabled: true, scaleFactor: 0.5 } }
+      }))
+    );
+
+    const container = document.getElementById('network');
+    const data = { nodes, edges };
+    const options = {
+      physics: {
+        enabled: true,
+        barnesHut: {
+          gravitationalConstant: -3000,
+          centralGravity: 0.3,
+          springLength: 120,
+          springConstant: 0.04,
+          damping: 0.09
+        },
+        stabilization: { iterations: 200 }
+      },
+      interaction: {
+        hover: true,
+        tooltipDelay: 200,
+        zoomView: true,
+        dragView: true
+      }
+    };
+
+    const network = new vis.Network(container, data, options);
+    let physicsEnabled = true;
+
+    // Legend
+    const legendEl = document.getElementById('legend');
+    Object.entries(groupColors).forEach(([group, color]) => {
+      legendEl.innerHTML += `
+        <div class="legend-item">
+          <div class="legend-dot" style="background:${color}"></div>
+          <span>${group}</span>
+        </div>`;
+    });
+
+    // Stats
+    document.getElementById('nodeCount').textContent = nodes.length;
+    document.getElementById('edgeCount').textContent = edges.length;
+
+    // Tooltip
+    const tooltip = document.getElementById('tooltip');
+    network.on('hoverNode', function(params) {
+      const node = nodes.get(params.node);
+      tooltip.innerHTML = `<strong>${node.label}</strong><br/><span style="color:#aaa">${node.path}</span>`;
+      tooltip.style.display = 'block';
+    });
+    network.on('blurNode', function() { tooltip.style.display = 'none'; });
+    network.on('dragStart', function() { tooltip.style.display = 'none'; });
+
+    // Move tooltip with mouse
+    container.addEventListener('mousemove', function(e) {
+      if (tooltip.style.display === 'block') {
+        tooltip.style.left = (e.pageX + 15) + 'px';
+        tooltip.style.top = (e.pageY + 15) + 'px';
+      }
+    });
+
+    // Click to focus
+    network.on('click', function(params) {
+      if (params.nodes.length > 0) {
+        network.focus(params.nodes[0], { scale: 1.5, animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
+      }
+    });
+
+    function fitGraph() { network.fit({ animation: { duration: 800, easingFunction: 'easeInOutQuad' } }); }
+    
+    function togglePhysics() {
+      physicsEnabled = !physicsEnabled;
+      network.setOptions({ physics: { enabled: physicsEnabled } });
+      document.querySelector('.controls button:nth-child(2)').textContent = `Física: ${physicsEnabled ? 'ON' : 'OFF'}`;
+      document.querySelector('.controls button:nth-child(2)').classList.toggle('active', physicsEnabled);
+    }
+
+    function exportImage() {
+      const canvas = container.querySelector('canvas');
+      const link = document.createElement('a');
+      link.download = 'garryvault-grafo.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    // Initial fit after stabilization
+    network.once('stabilizationIterationsDone', fitGraph);
+  </script>
+</body>
+</html>
